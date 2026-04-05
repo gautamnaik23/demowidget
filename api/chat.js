@@ -1,18 +1,20 @@
 // /api/chat.js
 export default async function handler(req, res) {
   // -------------------------------
-  // CORS headers so your website can call this endpoint
+  // CORS headers so your widget can call this endpoint
   // -------------------------------
-  res.setHeader("Access-Control-Allow-Origin", "*"); // Allow all origins for now
+  res.setHeader("Access-Control-Allow-Origin", "*"); // Allow all origins (change to your domain in production)
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // Preflight request (browser sends OPTIONS first)
-  if (req.method === "OPTIONS") return res.status(200).end();
+  // Handle preflight request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
   try {
     // -------------------------------
-    // Get data from widget
+    // Extract data from the widget
     // -------------------------------
     const { message, thread_id, business_id } = req.body || {};
 
@@ -21,7 +23,7 @@ export default async function handler(req, res) {
     }
 
     // -------------------------------
-    // Forward to Make webhook
+    // Send data to Make webhook
     // -------------------------------
     const makeWebhookUrl = "https://hook.us2.make.com/kkyfx0yc5b82h9qpqo6v6hecdlxms0qb";
 
@@ -31,16 +33,17 @@ export default async function handler(req, res) {
       body: JSON.stringify({ message, thread_id, business_id })
     });
 
-    // Parse Make response if possible
+    // Try to parse JSON returned by Make
     let data;
     try {
       data = await makeResponse.json();
-    } catch {
-      data = { status: "sent to Make webhook" }; // fallback if Make doesn't return JSON
+    } catch (err) {
+      console.warn("Make webhook did not return JSON:", err);
+      data = { status: "sent to Make webhook" };
     }
 
     // -------------------------------
-    // Return response to widget
+    // Return Make response to widget
     // -------------------------------
     return res.status(200).json(data);
 
