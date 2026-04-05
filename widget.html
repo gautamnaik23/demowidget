@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Chat Widget</title>
+  <style>
+    #chat-widget {
+      width: 300px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      font-family: sans-serif;
+    }
+    #chat-box {
+      height: 200px;
+      overflow-y: auto;
+      border-bottom: 1px solid #ccc;
+      margin-bottom: 5px;
+      padding: 5px;
+    }
+    .user-msg { color: #333; margin: 3px 0; }
+    .ai-msg { color: #007bff; margin: 3px 0; }
+  </style>
+</head>
+<body>
+  <div id="chat-widget">
+    <div id="chat-box"></div>
+    <form id="chat-form">
+      <input type="text" id="chat-input" placeholder="Type your message..." style="width: 70%;">
+      <button type="submit">Send</button>
+    </form>
+  </div>
+
+  <script>
+    // -------------------------------
+    // Widget JS
+    // -------------------------------
+    const serverUrl = "https://your-vercel-project.vercel.app/api/chat"; // change this
+
+    function addMessageToChat(msg, fromAI = true) {
+      const chatBox = document.getElementById("chat-box");
+      const messageDiv = document.createElement("div");
+      messageDiv.className = fromAI ? "ai-msg" : "user-msg";
+      messageDiv.textContent = msg;
+      chatBox.appendChild(messageDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendMessage(text) {
+      const threadId = window.localStorage.getItem("thread_id") || `thread_${Date.now()}`;
+      window.localStorage.setItem("thread_id", threadId);
+      const businessId = "demo"; // optional
+
+      try {
+        const res = await fetch(serverUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, thread_id: threadId, business_id: businessId })
+        });
+        const data = await res.json();
+        console.log("Server response:", data);
+
+        addMessageToChat(data.reply || "Message sent!"); // assumes 'reply' returned from Make
+      } catch (err) {
+        console.error("Fetch error:", err);
+        addMessageToChat("Error connecting to server.");
+      }
+    }
+
+    document.getElementById("chat-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = document.getElementById("chat-input");
+      const text = input.value.trim();
+      if (text) {
+        addMessageToChat(text, false);
+        sendMessage(text);
+        input.value = "";
+      }
+    });
+  </script>
+</body>
+</html>
