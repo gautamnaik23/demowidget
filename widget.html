@@ -4,78 +4,85 @@
   <meta charset="UTF-8">
   <title>AI Chat Widget</title>
   <style>
-    #chat-widget {
-      width: 300px;
-      border: 1px solid #ccc;
-      padding: 10px;
-      font-family: sans-serif;
-    }
-    #chat-box {
-      height: 200px;
-      overflow-y: auto;
-      border-bottom: 1px solid #ccc;
-      margin-bottom: 5px;
-      padding: 5px;
-    }
-    .user-msg { color: #333; margin: 3px 0; }
-    .ai-msg { color: #007bff; margin: 3px 0; }
+    #chat-box { border: 1px solid #ccc; padding: 10px; width: 300px; height: 400px; overflow-y: auto; }
+    .user { color: blue; margin-bottom: 5px; }
+    .ai { color: green; margin-bottom: 5px; }
   </style>
 </head>
 <body>
-  <div id="chat-widget">
-    <div id="chat-box"></div>
-    <form id="chat-form">
-      <input type="text" id="chat-input" placeholder="Type your message..." style="width: 70%;">
-      <button type="submit">Send</button>
-    </form>
-  </div>
+  <div id="chat-box"></div>
+  <form id="chat-form">
+    <input type="text" id="message-input" placeholder="Type a message" required />
+    <button type="submit">Send</button>
+  </form>
 
   <script>
-    // -------------------------------
-    // Widget JS
-    // -------------------------------
-    const serverUrl = "/api/chat"; // change this
+    const chatBox = document.getElementById("chat-box");
+    const chatForm = document.getElementById("chat-form");
+    const messageInput = document.getElementById("message-input");
 
-    function addMessageToChat(msg, fromAI = true) {
-      const chatBox = document.getElementById("chat-box");
-      const messageDiv = document.createElement("div");
-      messageDiv.className = fromAI ? "ai-msg" : "user-msg";
-      messageDiv.textContent = msg;
-      chatBox.appendChild(messageDiv);
+    // For demo, generate a thread ID per session
+    const threadId = "thread_" + Math.random().toString(36).substr(2, 9);
+
+    // Track last seen AI response ID to avoid duplicates
+    let lastSeenAIId = 0;
+
+    // Send message to chat.js / Make webhook
+    async function sendMessage(text) {
+      appendMessage("user", text);
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, thread_id: threadId })
+        });
+
+        const data = await res.json();
+        console.log("Server response:", data);
+        messageInput.value = "";
+      } catch (err) {
+        console.error("Fetch error:", err);
+      }
+    }
+
+    // Poll Google Sheets / Make scenario for new AI messages
+    async function pollAIResponses() {
+      try {
+        // Replace this URL with your Make scenario endpoint that returns latest AI messages
+        const pollUrl = `/api/get_ai_responses?thread_id=${threadId}&after_id=${lastSeenAIId}`;
+
+        const res = await fetch(pollUrl);
+        const data = await res.json();
+
+        if (data && data.messages && data.messages.length > 0) {
+          data.messages.forEach(msg => {
+            appendMessage("ai", msg.text);
+            lastSeenAIId = Math.max(lastSeenAIId, msg.id); // track last seen
+          });
+        }
+      } catch (err) {
+        console.error("Polling error:", err);
+      }
+    }
+
+    function appendMessage(sender, text) {
+      const div = document.createElement("div");
+      div.className = sender;
+      div.textContent = text;
+      chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    async function sendMessage(text) {
-      const threadId = window.localStorage.getItem("thread_id") || `thread_${Date.now()}`;
-      window.localStorage.setItem("thread_id", threadId);
-      const businessId = "demo"; // optional
-
-      try {
-        const res = await fetch(serverUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, thread_id: threadId, business_id: businessId })
-        });
-        const data = await res.json();
-        console.log("Server response:", data);
-
-        addMessageToChat(data.reply || "Message sent!"); // assumes 'reply' returned from Make
-      } catch (err) {
-        console.error("Fetch error:", err);
-        addMessageToChat("Error connecting to server.");
-      }
-    }
-
-    document.getElementById("chat-form").addEventListener("submit", (e) => {
+    // Form submission
+    chatForm.addEventListener("submit", (e) => {
       e.preventDefault();
-      const input = document.getElementById("chat-input");
-      const text = input.value.trim();
-      if (text) {
-        addMessageToChat(text, false);
-        sendMessage(text);
-        input.value = "";
-      }
+      const text = messageInput.value.trim();
+      if (text) sendMessage(text);
     });
+
+    // Start polling every 2 seconds
+    setInterval(pollAIResponses, 2000);
   </script>
 </body>
 </html>
