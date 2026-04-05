@@ -1,0 +1,46 @@
+// /api/get_ai_responses.js
+import { GoogleSpreadsheet } from "google-spreadsheet";
+import creds from "./google-service-account.json"; // adjust path if needed
+
+export default async function handler(req, res) {
+  // -------------------------------
+  // CORS headers so your widget can call this endpoint
+  // -------------------------------
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.status(200).end();
+
+  try {
+    const { thread_id } = req.query; // your widget passes ?thread_id=...
+    if (!thread_id) return res.status(400).json({ error: "Missing thread_id" });
+
+    // -------------------------------
+    // Connect to Google Sheets
+    // -------------------------------
+    const doc = new GoogleSpreadsheet("1R0XrgG_TaFesa5feugAV9cAoUOHJye1G7uVJ7X_QgyM"); // replace with your sheet ID
+    await doc.useServiceAccountAuth(creds);
+    await doc.loadInfo();
+
+    const sheet = doc.sheetsByIndex[0]; // first sheet (adjust if needed)
+    const rows = await sheet.getRows();
+
+    // -------------------------------
+    // Filter AI messages for this thread and sort by timestamp
+    // -------------------------------
+    const aiMessages = rows
+      .filter(
+        r =>
+          r["Thread ID"] === thread_id &&
+          r["Messenger"]?.toLowerCase() === "ai"
+      )
+      .sort((a, b) => new Date(a["Timestamp"]) - new Date(b["Timestamp"]));
+
+    const latestMessage = aiMessages[aiMessages.length - 1] || null;
+
+    return res.status(200).json({ latestMessage });
+  } catch (error) {
+    console.error("get_ai_responses.js error:", error);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
